@@ -1,0 +1,12 @@
+dependencies:
+  espressif/button: "^3.2.0"
+
+  espressif/mpu6050:
+    path: components/sensors/imu/mpu6050
+    git: https://github.com/espressif/esp-iot-solution.git
+    version: "6747dca0ec2dcb4a1a0bec17fef6d7ea3693b858"
+
+  espressif/bus:
+    path: components/bus
+    git: https://github.com/espressif/esp-iot-solution.git
+    version: "6747dca0ec2dcb4a1a0bec17fef6d7ea3693b858"
