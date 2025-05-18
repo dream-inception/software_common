@@ -30,7 +30,7 @@ extern "C" {
         .max_channel = 4, \
         .speed_mode = LEDC_LOW_SPEED_MODE, \
         .duty_resolution = LEDC_TIMER_13_BIT, \
-        .timer_num = LEDC_TIMER_1, \
+        .timer_num = LEDC_TIMER_0, \
         .freq_hz = 5000, \
         .duty_inversion = false, \
     }

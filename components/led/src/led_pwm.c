@@ -34,14 +34,11 @@
 #define DATA_MULTIPLE    10
 
 #define GAMMA_CORRECTION 0.8                               /**< Gamma curve parameter */
-#define GAMMA_TABLE_SIZE ((LED_PWM_BRIGHTNESS_MAX * 10) + 1) /**< Gamma table size, used for led fade*/
+#define GAMMA_TABLE_SIZE ((LED_PWM_BRIGHTNESS_MAX * DATA_MULTIPLE) + 1) /**< Gamma table size, used for led fade*/
 #define DUTY_SET_CYCLE   (20)                                /**< Set duty cycle */
 
-
-#define LEDC_LS_TIMER          LEDC_TIMER_1
 #define LEDC_LS_MODE           LEDC_LOW_SPEED_MODE
 
-#define LEDC_DUTY_RES          LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
 #define LEDC_DUTY              (8191) // Set duty to 100%. (2 ** 13) - 1 = 4095
 #define LEDC_FREQUENCY         (5000) // Frequency in Hertz. Set frequency at 5 kHz
 
@@ -50,7 +47,7 @@ typedef struct {
     int final;
     int step;
     int cycle;
-    size_t num;
+    int num;
 } led_fade_data_t;
 
 typedef struct {
@@ -94,8 +91,6 @@ static void led_pwm_fade_timercb(void *arg)
             continue;
         }
 
-        // ESP_LOGW(TAG, "[%s, %d] %d, num: %d", __func__, __LINE__, i, fade_config->num);
-
         fade_config->cur += fade_config->step;
         fade_config->num--;
         int duty = fade_config->cur;
@@ -120,8 +115,8 @@ static void led_pwm_fade_timercb(void *arg)
         }
 
         uint32_t gamma_duty = g_led_config->duty_inversion ? LEDC_DUTY - g_gamma_table[duty / 100] : g_gamma_table[duty / 100];
-        ledc_set_duty(LEDC_LS_MODE, i, gamma_duty);
-        ledc_update_duty(LEDC_LS_MODE, i);
+        ledc_set_duty(g_led_config->speed_mode, i, gamma_duty);
+        ledc_update_duty(g_led_config->speed_mode, i);
     }
 
     if (idle_channel_num == g_led_config->max_channel) {
@@ -142,9 +137,16 @@ esp_err_t led_pwm_set(gpio_num_t gpio, uint8_t duty, uint32_t fade_ms)
     led_info_t *led_info = g_led_info[channel];
     led_fade_data_t *fade_config = &led_info->fade_config;
     fade_config->final = duty * 1000;
-    fade_config->num   = (fade_ms > DUTY_SET_CYCLE) ? fade_ms / DUTY_SET_CYCLE : 1;;
+    fade_config->num   = (fade_ms > DUTY_SET_CYCLE) ? fade_ms / DUTY_SET_CYCLE : 1;
     fade_config->cycle = 0;
     fade_config->step  = (fade_config->final - fade_config->cur) / fade_config->num;
+
+    // if (fade_config->step == 0) {
+    //     return ESP_OK;
+    // }
+
+    // ESP_LOGW(TAG, "final: %d, cycle: %d, num: %d, step: %d",
+    //          fade_config->final, fade_config->cycle, fade_config->num, fade_config->step);
 
     if (g_timer_running_flag == false) {
         if (fade_config->num > 1) {

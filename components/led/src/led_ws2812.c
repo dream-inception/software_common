@@ -30,10 +30,10 @@
 
 
 // 10MHz resolution, 1 tick = 0.1us (led strip needs a high resolution)
+#define DATA_MULTIPLE    1
 #define LED_STRIP_RMT_RES_HZ    (10 * 1000 * 1000)
-#define GAMMA_TABLE_SIZE        256
-#define DUTY_SET_CYCLE   (20)                                /**< Set duty cycle */
-
+#define GAMMA_TABLE_SIZE        (255 * DATA_MULTIPLE + 1)
+#define DUTY_SET_CYCLE          (20)  /**< Set duty cycle */
 
 typedef struct {
     struct {
@@ -44,7 +44,6 @@ typedef struct {
     int cycle;
     int num;
 } led_fade_data_t;
-
 
 typedef struct {
     uint8_t red;
@@ -122,10 +121,12 @@ esp_err_t led_ws2812_create(gpio_num_t gpio, uint32_t num)
         led_strip_spi_config_t spi_config = {
             .clk_src = SPI_CLK_SRC_DEFAULT, // different clock source can lead to different power consumption
             .flags.with_dma = true, // Using DMA can improve performance and help drive more LEDs
-            .spi_bus = SPI2_HOST + (channel - 3),   // SPI bus ID
+            .spi_bus = SPI2_HOST + (channel - 2),   // SPI bus ID
         };
         ESP_ERROR_CHECK(led_strip_new_spi_device(&strip_config, &spi_config, &led_info->handle));
     }
+
+    led_strip_clear(led_info->handle);
 
     return ESP_OK;
 }
@@ -170,17 +171,37 @@ static void led_ws2812_fade_timercb(void *arg)
         for (int j = 0; j < 3; j++) {
             fade_config->color[j].cur += fade_config->color[j].step;
 
-            if (fade_config->color[j].cur > fade_config->color[j].final) {
-                fade_config->color[j].cur = fade_config->color[j].final;
-            } else if (fade_config->color[j].cur < 0) {
+            if (fade_config->color[j].cur < 0) {
                 fade_config->color[j].cur = 0;
+            } else if ((fade_config->color[j].step > 0 && fade_config->color[j].cur >= fade_config->color[j].final) 
+                || (fade_config->cycle == 0 && fade_config->color[j].step < 0 && fade_config->color[j].cur <= fade_config->color[j].final )
+                || (fade_config->cycle == 0 && fade_config->num == 1)) {
+                fade_config->color[j].cur = fade_config->color[j].final;
             }
         }
 
+        // ESP_LOGW(TAG, "color: %d, step: %d, num: %d, cycle: %d",
+        //  fade_config->color[1].cur, fade_config->color[1].step, fade_config->num, fade_config->cycle);
+        // ESP_LOGW(TAG, "step: %d, %d, %d", fade_config->color[0].step, fade_config->color[1].step, fade_config->color[2].step);
         fade_config->num--;
-        uint8_t r = g_gamma_table[fade_config->color[0].cur / 1000];
-        uint8_t g = g_gamma_table[fade_config->color[1].cur / 1000];
-        uint8_t b = g_gamma_table[fade_config->color[2].cur / 1000];
+
+        // for (int k = 0; k < 255; k++) {
+
+        //     printf("%d ", g_gamma_table[k]);
+        //     if (k % 10 == 0) {
+        //         printf("\n");
+        //     }
+        // }
+        // printf("\n");
+        
+        // ESP_LOGW(TAG, "color: %d, %d, %d", fade_config->color[0].cur, fade_config->color[1].cur, fade_config->color[2].cur);
+        uint8_t r = g_gamma_table[(fade_config->color[0].cur + 500) / 1000];
+        uint8_t g = g_gamma_table[(fade_config->color[1].cur + 500) / 1000];
+        uint8_t b = g_gamma_table[(fade_config->color[2].cur + 500) / 1000];
+
+        // uint8_t r = fade_config->color[0].cur / 1000;
+        // uint8_t g = fade_config->color[1].cur / 1000;
+        // uint8_t b = fade_config->color[2].cur / 1000;
 
         if (fade_config->cycle) {
             if (fade_config->num <= 0) {
@@ -211,6 +232,7 @@ static void led_ws2812_fade_timercb(void *arg)
 
 esp_err_t led_ws2812_set_rgb(gpio_num_t gpio_num, uint32_t index, uint8_t red, uint8_t green, uint8_t blue, uint32_t fade_ms)
 {
+    // ESP_LOGI(TAG, "led_ws2812_set_rgb, gpio: %d, index: %d, r: %d, g: %d, b: %d, fade_ms: %d", gpio_num, index, red, green, blue, fade_ms);
     int channel = led_gpio_to_channel(gpio_num);
 
     if (channel == -1) {
@@ -224,6 +246,30 @@ esp_err_t led_ws2812_set_rgb(gpio_num_t gpio_num, uint32_t index, uint8_t red, u
 
     led_info_t *led_info = g_led_info[channel];
     led_fade_data_t *fade_config = &led_info->fade_config;
+
+// TODO: Implement fade_ms
+
+    if (fade_config->cycle) {
+        led_ws2812_blink_stop(gpio_num);
+    }
+
+    if (fade_ms == 0) {
+         red = g_gamma_table[red];
+         green = g_gamma_table[green];
+         blue = g_gamma_table[blue];
+        if (index == led_info->num) {
+            for (int i = 0; i < led_info->num; i++) {
+                led_strip_set_pixel(led_info->handle, i, red, green, blue);
+            }
+        } else {
+            led_strip_set_pixel(led_info->handle, index, red, green, blue);
+        }
+
+        led_strip_refresh(led_info->handle);
+
+        return ESP_OK;
+    }
+
     fade_config->num = (fade_ms > DUTY_SET_CYCLE) ? fade_ms / DUTY_SET_CYCLE : 1;
     fade_config->cycle = 0;
     fade_config->color[0].final = red * 1000;
@@ -234,6 +280,10 @@ esp_err_t led_ws2812_set_rgb(gpio_num_t gpio_num, uint32_t index, uint8_t red, u
     for (int i = 0; i < 3; i++) {
         fade_config->color[i].step = (fade_config->color[i].final - fade_config->color[i].cur) / fade_config->num;
     }
+    // ESP_LOGW(TAG, "fade_config, cur: %d, %d, %d", fade_config->color[0].cur, fade_config->color[1].cur, fade_config->color[2].cur);
+    // ESP_LOGW(TAG, "fade_config, final: %d, %d, %d", fade_config->color[0].final, fade_config->color[1].final, fade_config->color[2].final);
+    // ESP_LOGW(TAG, "fade_config, step: %d, %d, %d", fade_config->color[0].step, fade_config->color[1].step, fade_config->color[2].step);
+    // ESP_LOGW(TAG, "fade_config, num: %d", fade_config->num);
 
     if (g_timer_running_flag == false) {
         if (fade_config->num > 1) {
@@ -247,6 +297,64 @@ esp_err_t led_ws2812_set_rgb(gpio_num_t gpio_num, uint32_t index, uint8_t red, u
     return ESP_OK;
 }
 
+esp_err_t led_ws2812_set_buffer(gpio_num_t gpio_num, uint32_t index, uint32_t color)
+{
+    int channel = led_gpio_to_channel(gpio_num);
+
+    if (channel == -1) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (index > g_led_info[channel]->num) {
+        ESP_LOGE(TAG, "index is invalid, max_leds = %d", g_led_info[channel]->num);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    led_info_t *led_info = g_led_info[channel];
+    led_fade_data_t *fade_config = &led_info->fade_config;
+
+    if (fade_config->cycle) {
+        led_ws2812_blink_stop(gpio_num);
+    }
+
+    uint8_t red = (color >> 16) & 0xFF;
+    uint8_t green = (color >> 8) & 0xFF;
+    uint8_t blue = color & 0xFF;
+    // ESP_LOGI(TAG, "led_ws2812_set_buffer, gpio: %d, index: %d, r: %d, g: %d, b: %d", gpio_num, index, red, green, blue);
+
+    red = g_gamma_table[red];
+    green = g_gamma_table[green];
+    blue = g_gamma_table[blue];
+
+    if (index == led_info->num) {
+        for (int i = 0; i < led_info->num; i++) {
+            led_strip_set_pixel(led_info->handle, i, red, green, blue);
+        }
+    } else {
+        led_strip_set_pixel(led_info->handle, index, red, green, blue);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t led_ws2812_refresh(gpio_num_t gpio_num)
+{
+    int channel = led_gpio_to_channel(gpio_num);
+
+    if (channel == -1) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    led_info_t *led_info = g_led_info[channel];
+    led_fade_data_t *fade_config = &led_info->fade_config;
+
+    if (fade_config->cycle) {
+        led_ws2812_blink_stop(gpio_num);
+    }
+
+    led_strip_refresh(led_info->handle);
+    return ESP_OK;
+}
 
 esp_err_t led_ws2812_blink_start(gpio_num_t gpio, uint32_t index, uint8_t red, uint8_t green, uint8_t blue, uint32_t period_ms)
 {
@@ -261,6 +369,10 @@ esp_err_t led_ws2812_blink_start(gpio_num_t gpio, uint32_t index, uint8_t red, u
 
     led_info_t *led_info = g_led_info[channel];
     led_fade_data_t *fade_config = &led_info->fade_config;
+
+    if (fade_config->cycle) {
+        led_ws2812_blink_stop(gpio);
+    }
 
     led_info->index = index;
     fade_config->num = period_ms / 2 / DUTY_SET_CYCLE;
@@ -278,7 +390,8 @@ esp_err_t led_ws2812_blink_start(gpio_num_t gpio, uint32_t index, uint8_t red, u
     }
 
     for (int i = 0; i < 3; i++) {
-        ESP_LOGD(TAG, "fade_config, color[%d], cur: %d, final: %d, step: %d", i, fade_config->color[i].cur, fade_config->color[i].final, fade_config->color[i].step);
+        ESP_LOGW(TAG, "fade_config, num: %d, color[%d], cur: %d, final: %d, step: %d", fade_config->num,
+                i, fade_config->color[i].cur, fade_config->color[i].final, fade_config->color[i].step);
     }
 
     if (g_timer_running_flag == false) {
@@ -313,6 +426,11 @@ esp_err_t led_ws2812_blink_stop(gpio_num_t gpio_num)
     fade_config->num = 0;
     fade_config->cycle = 0;
 
+    vTaskDelay(DUTY_SET_CYCLE / portTICK_PERIOD_MS);
+
+    led_ws2812_set_rgb(gpio_num, led_info->index, 0, 0, 0, 0);
+    ESP_LOGW(TAG, "led_ws2812_blink_stop, gpio: %d", gpio_num);
+
     return ESP_OK;
 }
 
@@ -336,9 +454,8 @@ esp_err_t led_ws2812_init(const led_ws2812_config_t *config)
     g_led_info = calloc(g_led_config->max_channel, sizeof(led_info_t *));
 
     if (g_gamma_table == NULL) {
-        /* g_gamma_table[GAMMA_TABLE_SIZE] must be 0 */
         g_gamma_table = calloc(GAMMA_TABLE_SIZE, sizeof(uint32_t));
-        led_gamma_table_create(g_gamma_table, GAMMA_TABLE_SIZE, 256, 1 / 1.8);
+        led_gamma_table_create(g_gamma_table, GAMMA_TABLE_SIZE, GAMMA_TABLE_SIZE, 1 / 1.8);
     }
 
     if (g_time_handle == NULL) {
@@ -375,7 +492,6 @@ esp_err_t led_ws2812_deinit()
     g_led_info = NULL;
     free(g_led_config);
     g_led_config = NULL;
-
 
     return ESP_OK;
 }

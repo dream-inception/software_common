@@ -136,7 +136,7 @@ static int heap_func(int argc, char **argv)
     pxTaskStatusArray = malloc(uxTaskGetNumberOfTasks() * sizeof(TaskStatus_t));
 
     if (!pxTaskStatusArray) {
-        return ;
+        return ESP_ERR_NO_MEM;
     }
 
     /* Generate the (binary) data. */

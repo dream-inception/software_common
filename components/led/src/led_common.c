@@ -9,8 +9,6 @@
 #include "led_common.h"
 
 
-
-
 esp_err_t led_gamma_table_create(uint32_t *data, size_t size, uint32_t range, float correction)
 {
     ESP_LOGW("TAG", "Creating gamma table, size: %d, range: %d, correction: %f", size, range, correction);
@@ -25,9 +23,9 @@ esp_err_t led_gamma_table_create(uint32_t *data, size_t size, uint32_t range, fl
         data[i] = (uint32_t)(gamma_value + 0.5);
     }
 
-    data[size - 1] = range;
+    data[size - 1] = range - 1;
 
-// ESP_LOG_BUFFER_HEXDUMP("gamma_table", data, size * sizeof(uint32_t), ESP_LOG_INFO);
+    // ESP_LOG_BUFFER_HEXDUMP("gamma_table", data, size * sizeof(uint32_t), ESP_LOG_INFO);
     return ESP_OK;
 }
 

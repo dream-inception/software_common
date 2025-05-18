@@ -74,7 +74,7 @@ esp_err_t storage_erase(const char *key)
     ESP_ERROR_RETURN(ret != ESP_OK, ret, "Open non-volatile storage");
 
     /**
-     * @brief If key is CONFIG_NVS_NAMESPACE, erase all info in CONFIG_NVS_NAMESPACE
+     * @brief If key is NULL, erase all info in CONFIG_NVS_NAMESPACE
      */
     if (!key) {
         ret = nvs_erase_all(handle);

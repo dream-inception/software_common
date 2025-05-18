@@ -35,6 +35,7 @@ typedef struct {
 
 
 typedef enum {
+    TOUCHPAD_BUTTON_EVT_NONE = -1,        //!< No event
     TOUCHPAD_BUTTON_EVT_ON_PRESS,         //!< Button Press event
     TOUCHPAD_BUTTON_EVT_ON_RELEASE,       //!< Button Release event
     TOUCHPAD_BUTTON_EVT_ON_LONGPRESS,     //!< Button LongPress event

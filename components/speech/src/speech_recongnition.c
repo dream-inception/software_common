@@ -31,7 +31,7 @@
 
 #include "speech_recognition.h"
 
-static const char *TAG = "ear_speech_recognition";
+static const char *TAG = "speech_recognition";
 
 int *buffer = NULL;
 int size = 0;
@@ -94,7 +94,7 @@ esp_err_t speech_mic_record(int **audio_data, size_t *audio_len)
     //     buffer[x] = s1 | s2;
     // }
 
-    *audio_data = (int16_t *)buffer;
+    *audio_data = buffer;
 
     return ESP_OK;
 }
@@ -159,7 +159,7 @@ esp_err_t speech_recognition_command(const int16_t *audio_data, size_t audio_len
 
     } else if (mn_state == ESP_MN_STATE_TIMEOUT) {
         esp_mn_results_t *mn_result = multinet->get_results(model_mn_data);
-        ESP_LOGI(TAG, "timeout, string:%s\n", mn_result->string);
+        // ESP_LOGI(TAG, "timeout, string:%s", mn_result->string);
 
         return ESP_ERR_TIMEOUT;
     } else {

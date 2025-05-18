@@ -63,6 +63,9 @@ esp_err_t led_ws2812_set_rgb(gpio_num_t gpio, uint32_t index,
 esp_err_t led_ws2812_set_hsv(gpio_num_t gpio, uint32_t index,
                              uint16_t h, uint8_t s, uint8_t v, uint32_t fade_ms);
 
+esp_err_t led_ws2812_set_buffer(gpio_num_t gpio_num, uint32_t index, uint32_t color);
+esp_err_t led_ws2812_refresh(gpio_num_t gpio_num);
+
 /**
  * @brief Start blinking LED
  *

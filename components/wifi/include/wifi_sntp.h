@@ -20,21 +20,14 @@
 extern "C" {
 #endif /**< _cplusplus */
 
-esp_err_t wifi_init(void);
 
-esp_err_t wifi_sta_set_config(const char *ssid, const char *password, uint32_t wait_ms);
 
-esp_err_t wifi_sta_get_config(char *ssid, char *password);
+esp_err_t sntp_start(void);
 
-esp_err_t wifi_sta_reconnect(bool enable);
+bool sntp_check(void);
 
-bool wifi_sta_is_connected(void);
+esp_err_t sntp_wait(uint32_t timeout_ms);
 
-esp_err_t wifi_ap_set_config(const char *ssid, const char *password);
-
-esp_err_t wifi_ap_nat_enable(bool enable);
-    
-esp_err_t wifi_ap_dns_redirect_enable(bool enable);
 
 #ifdef __cplusplus
 }

@@ -81,7 +81,6 @@ esp_err_t touchpad_button_create(gpio_num_t gpio, float sensitivity, touchpad_bu
     touchpad_info->gpio = gpio;
     touchpad_info->cb = cb;
 
-    ESP_LOGI(TAG, "Touch button installed");
     touch_button_config_t button_config = {
         .channel_num = gpio,
         .channel_sens = sensitivity,
@@ -105,10 +104,8 @@ esp_err_t touchpad_button_create(gpio_num_t gpio, float sensitivity, touchpad_bu
     /* Set LongPress event trigger threshold time */
     ESP_ERROR_CHECK(touch_button_set_longpress(touchpad_info->handle, g_touchpad_button_config->longpress_ms));
 
-    ESP_LOGI(TAG, "Touch buttons created");
-
     // TODO: Start touch element library if not started yet
-    if (gpio == GPIO_NUM_3) {
+    if (gpio == GPIO_NUM_9) {
         touch_element_start();
         ESP_LOGI(TAG, "Touch element library start");
     }
