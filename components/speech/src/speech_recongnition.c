@@ -39,10 +39,17 @@ static esp_mn_iface_t *multinet = NULL;
 const esp_wn_iface_t *wakenet = NULL;
 static model_iface_data_t *model_wn_data = NULL;
 static model_iface_data_t *model_mn_data = NULL;
-static i2s_chan_handle_t rx_chan;        // I2S rx channel handler
+static i2s_chan_handle_t rx_chan = NULL;        // I2S rx channel handler
+static bool i2s_channel_enabled = false;        // Track I2S channel state
 
 esp_err_t speech_mic_init(const speech_mic_config_t *config)
 {
+    // Check if I2S channel is already initialized
+    if (rx_chan != NULL) {
+        ESP_LOGW(TAG, "I2S channel already initialized");
+        return ESP_OK;
+    }
+
     i2s_chan_config_t rx_chan_cfg = {
         .id = I2S_NUM_0,
         .role = I2S_ROLE_MASTER,
@@ -69,13 +76,52 @@ esp_err_t speech_mic_init(const speech_mic_config_t *config)
         },
     };
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_chan, &rx_std_cfg));
-    i2s_channel_enable(rx_chan);
+    
+    // Enable I2S channel and track state
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
+    i2s_channel_enabled = true;
+    ESP_LOGI(TAG, "I2S channel enabled successfully");
+
+    return ESP_OK;
+}
+
+esp_err_t speech_mic_deinit(void)
+{
+    if (rx_chan == NULL) {
+        ESP_LOGW(TAG, "I2S channel not initialized");
+        return ESP_OK;
+    }
+
+    // Only disable if channel is enabled
+    if (i2s_channel_enabled) {
+        ESP_LOGI(TAG, "Disabling I2S channel");
+        esp_err_t ret = i2s_channel_disable(rx_chan);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to disable I2S channel: %s", esp_err_to_name(ret));
+        } else {
+            i2s_channel_enabled = false;
+        }
+    }
+
+    // Delete the channel
+    esp_err_t ret = i2s_del_channel(rx_chan);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to delete I2S channel: %s", esp_err_to_name(ret));
+    } else {
+        rx_chan = NULL;
+        ESP_LOGI(TAG, "I2S channel deleted successfully");
+    }
 
     return ESP_OK;
 }
 
 esp_err_t speech_mic_record(int **audio_data, size_t *audio_len)
 {
+    if (rx_chan == NULL || !i2s_channel_enabled) {
+        ESP_LOGE(TAG, "I2S channel not properly initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     esp_err_t ret = ESP_OK;
     *audio_data = 0;
 
@@ -128,6 +174,31 @@ esp_err_t speech_recognition_init(void)
     }
 
     buffer = (int *)malloc(size * 2 * sizeof(int));
+
+    return ESP_OK;
+}
+
+esp_err_t speech_recognition_deinit(void)
+{
+    // Clean up speech recognition resources
+    if (model_wn_data != NULL) {
+        wakenet->destroy(model_wn_data);
+        model_wn_data = NULL;
+    }
+    
+    if (model_mn_data != NULL) {
+        multinet->destroy(model_mn_data);
+        model_mn_data = NULL;
+    }
+
+    // Clean up buffer
+    if (buffer != NULL) {
+        free(buffer);
+        buffer = NULL;
+    }
+
+    // Clean up I2S
+    speech_mic_deinit();
 
     return ESP_OK;
 }

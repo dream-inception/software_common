@@ -41,9 +41,13 @@ typedef struct {
 
 esp_err_t speech_mic_init(const speech_mic_config_t *config);
 
+esp_err_t speech_mic_deinit(void);
+
 esp_err_t speech_mic_record(int **audio_data, size_t *audio_len);
 
-esp_err_t speech_recognition_init();
+esp_err_t speech_recognition_init(void);
+
+esp_err_t speech_recognition_deinit(void);
 
 esp_err_t speech_recognition_wakenet(const int16_t *audio_data, size_t audio_len, bool *wakenet_state);
 
